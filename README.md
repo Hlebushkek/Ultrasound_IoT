@@ -9,4 +9,9 @@ Used examples from https://github.com/embassy-rs/embassy/tree/main/embassy-boot-
 
 ## broker
 - MQTT broker via public HiveMQ
-- aggregate several embedded device messages and then submit them to server
+- Aggregate several embedded device messages and then submit them to server
+
+## server
+- Manage patient and their scans in db
+- Distirbute scan files
+- Establish websocket connection with clients to send scan session updates
