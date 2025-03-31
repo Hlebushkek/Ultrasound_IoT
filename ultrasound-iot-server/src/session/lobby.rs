@@ -27,7 +27,10 @@ impl Handler<Connect> for Lobby {
     type Result = ();
 
     fn handle(&mut self, msg: Connect, _ctx: &mut Context<Self>) {
-        println!("Client {}, connected to session: {}", msg.client, msg.session);
+        println!(
+            "Client {}, connected to session: {}",
+            msg.client, msg.session
+        );
         self.sessions.insert(msg.session, msg.addr);
     }
 }

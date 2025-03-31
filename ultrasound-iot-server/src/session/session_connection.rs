@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
-use uuid::Uuid;
 use actix::{Actor, ActorContext, ActorFutureExt, AsyncContext, ContextFutureSpawner, WrapFuture};
-use actix::{Addr, Running, Handler, StreamHandler};
+use actix::{Addr, Handler, Running, StreamHandler};
+use uuid::Uuid;
 
 use actix_web_actors::ws;
 
@@ -68,7 +68,10 @@ impl Actor for SessionConnection {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        self.lobby_addr.do_send(Disconnect { session: self.session.clone(), client: self.client.clone() });
+        self.lobby_addr.do_send(Disconnect {
+            session: self.session.clone(),
+            client: self.client.clone(),
+        });
         Running::Stop
     }
 }

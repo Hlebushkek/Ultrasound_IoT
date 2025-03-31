@@ -1,8 +1,8 @@
 use uuid::Uuid;
 
 use actix::Addr;
-use actix_web::{get, Error, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Path, Payload};
+use actix_web::{Error, HttpRequest, HttpResponse, get};
 use actix_web_actors::ws;
 
 use crate::session::lobby::Lobby;
