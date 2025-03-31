@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "ultrasound-iot-borker",
+    "ultrasound-iot-embedded-rp",
+    "ultrasound-iot-image-gen",
+    "ultrasound-iot-server"
+]
