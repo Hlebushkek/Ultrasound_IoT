@@ -15,3 +15,8 @@ Used examples from https://github.com/embassy-rs/embassy/tree/main/embassy-boot-
 - Manage patient and their scans in db
 - Distirbute scan files
 - Establish websocket connection with clients to send scan session updates
+
+## image-gen
+- Rust lib for ultrasound raw data convertion to image
+- UniFFI bindgen for Swift
+- Example used from https://github.com/ianthetechie/uniffi-starter

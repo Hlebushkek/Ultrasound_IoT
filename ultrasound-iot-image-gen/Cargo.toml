@@ -20,5 +20,5 @@ crate-type = ["cdylib", "staticlib"]
 name = "ultrasound"
 
 [[bin]]
-name = "uniffi-bindgen"
-path = "uniffi-bindgen.rs"
+name = "uniffi-bindgen-swift"
+path = "uniffi-bindgen-swift.rs"
