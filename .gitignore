@@ -14,3 +14,6 @@ target/
 
 # config
 **/config/local.toml
+
+# UniFFI
+**/out
