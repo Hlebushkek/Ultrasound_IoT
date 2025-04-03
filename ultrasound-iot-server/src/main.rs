@@ -1,5 +1,7 @@
 use secrecy::ExposeSecret;
 
+use tracing::debug;
+
 use actix::prelude::*;
 use actix_web::{App, HttpServer, web::Data};
 
@@ -16,6 +18,8 @@ async fn main() -> std::io::Result<()> {
     let settings = Settings::new().expect("Failed to initialize settings");
 
     utils::init_tracing("debug");
+
+    debug!("{:?}", settings);
 
     let conn_str = settings.database.connection_string();
     let conn = Database::connect(conn_str.expose_secret())

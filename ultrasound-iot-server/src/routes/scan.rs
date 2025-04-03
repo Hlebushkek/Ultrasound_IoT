@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use services::utils;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -10,6 +9,7 @@ use actix_web::web::{Data, Json, Path};
 use actix_web::{HttpResponse, Responder, get, patch, post};
 
 use services::scans::{self, ScanId};
+use services::utils;
 
 use crate::app_state::AppState;
 use crate::session::lobby::Lobby;
@@ -33,23 +33,25 @@ pub struct AssignRequest {
     pub patient: Uuid,
 }
 
-#[get("")]
+#[get("/{session}/{client}")]
 pub async fn get(
     data: Data<AppState>,
-    payload: Json<ScanRequest>,
+    path: Path<(String, Uuid)>,
 ) -> Result<impl Responder, Error> {
+    let (session, client) = path.into_inner();
     println!(
         "Downloading scan from session {}, for client {}",
-        payload.session, payload.client
+        session, client
     );
 
-    let scan = scans::get_by_session(&data.conn, &payload.session)
+    let scan = scans::get_by_session(&data.conn, &session)
         .await
         .map_err(|e| crate::utils::to_internal_error("DB", e))?;
 
     let path = utils::file_url(&scan.session, &scan.device.to_string());
 
-    Ok(NamedFile::open_async(path).await)
+    // Ok(NamedFile::open_async(path).await)
+    Ok(NamedFile::open_async("../example_us_bmode_sensor_data.h5").await)
 }
 
 #[post("")]
@@ -98,9 +100,3 @@ pub async fn assign_patient(
 
     Ok(HttpResponse::Ok().body("Assigned"))
 }
-
-/*  TODO:
-    client connect via session id
-    add new post route wich will assign scan to patient (on iOS app there will be "Finilize" button that will call this route)
-    choose random frame from hd5 file, and copy it to hd5 file of current scan session (create if first scan)
-*/
