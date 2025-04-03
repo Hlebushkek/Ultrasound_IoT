@@ -1,11 +1,14 @@
-use std::f32;
 use image::{GrayImage, Luma};
 use ndarray::{Array2, Array3};
 use num_complex::Complex32;
+use std::f32;
 
 pub fn convert_to_complex(frame: Array3<f32>) -> Array2<Complex32> {
     let (height, width, channels) = frame.dim();
-    assert!(channels == 2, "Expected last dimension to be 2 (real, imag)");
+    assert!(
+        channels == 2,
+        "Expected last dimension to be 2 (real, imag)"
+    );
     let mut complex_array = Array2::<Complex32>::zeros((height, width));
     for i in 0..height {
         for j in 0..width {

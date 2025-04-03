@@ -1,11 +1,24 @@
-mod processing;
-use std::{fmt::Display, io::Cursor};
+pub mod constants;
+pub mod iq2img;
+pub mod uniffi_helper;
 
-use ndarray_npy::read_npy;
-use processing::*;
+#[cfg(feature = "rf2iq")]
+pub mod rf2iq;
+
+#[cfg(feature = "rf2iq")]
+use rf2iq::*;
+
+use std::{fmt::Display, io::Cursor, path::Path, time::Instant};
+use tracing::info;
 
 use image::{DynamicImage, GenericImageView, ImageOutputFormat};
-use ndarray::{Array3, Array4, Axis};
+
+use ndarray::{Array, Array1, Array2, Array3, ArrayBase, Dim, OwnedRepr, s};
+use ndarray_stats::QuantileExt;
+
+use constants::*;
+use iq2img::*;
+use uniffi_helper::Array3Data;
 
 uniffi::setup_scaffolding!();
 
@@ -31,10 +44,17 @@ impl Display for ImageError {
     }
 }
 
+#[derive(Debug, uniffi::Record)]
+pub struct IQData {
+    pub preproc: Array3Data,
+    pub t_interp: Vec<f64>,
+    pub xd: Vec<f64>,
+}
+
 #[derive(Debug, uniffi::Object)]
 #[uniffi::export(Debug)]
 pub struct ImageProcessor {
-    pub path: String
+    pub path: String,
 }
 
 #[uniffi::export]
@@ -43,30 +63,59 @@ impl ImageProcessor {
     pub fn new(path: String) -> Self {
         Self { path }
     }
-    
-    pub fn process(
-        &self,
-    ) -> Result<UltrasoundImage, ImageError> {
-        let raw_data: Array4<f32> =
-            read_npy(&self.path).expect("Failed to read npy file");
-        println!("Loaded raw data with shape: {:?}", raw_data.dim());
 
-        // For initial processing, select the frame.
-        // This gives a 3D array of shape (128, 382, 2)
-        let frame_index = 0;
-        let frame: Array3<f32> = raw_data.index_axis(Axis(0), frame_index).to_owned();
-        println!("Selected frame shape: {:?}", frame.dim());
-        
-        // Convert the selected frame to a 2D complex array (shape: 128 x 382).
-        let complex_data = convert_to_complex(frame);
-        println!("Converted frame to complex array with shape: {:?}", complex_data.dim());
+    pub fn process_iq(&self, data: IQData) -> Result<UltrasoundImage, ImageError> {
+        let before = Instant::now();
 
-        let envelope_data = compute_envelope(&complex_data);
-        let tgc_data = apply_tgc(&envelope_data);
-        let compressed_data = log_compression(&tgc_data);
-        
-        let img = create_image(&compressed_data);
-        let dyn_img = DynamicImage::ImageLuma8(img);
+        let preproc_data = data.preproc.into_array();
+        let t_interp = Array1::from_iter(data.t_interp.into_iter());
+        let xd = Array1::from_iter(data.xd.into_iter());
+
+        let zd = &t_interp * SPEED_SOUND / 2.;
+
+        // beamforming
+        let data_beamformed = beamform_df(&preproc_data, &t_interp, &xd);
+        info!("Beamformed Data shape = {:?}", data_beamformed.shape());
+        let m = data_beamformed.slice(s![0, ..]).sum();
+        info!("Beamformed Data sum = {:?}", m);
+
+        // lateral locations of beamformed a-lines
+        let xd2 = Array1::<f64>::range(0., N_TRANSMIT_BEAMS as f64, 1.) * ARRAY_PITCH;
+        let xd2_max = *xd.max().unwrap();
+        let xd2 = xd2 - xd2_max / 2.;
+
+        // envelope detection
+        let mut img = Array2::<f64>::zeros(data_beamformed.raw_dim());
+        for n in 0..N_TRANSMIT_BEAMS {
+            let a_line = data_beamformed.slice(s![n as usize, ..]).into_owned();
+            let env = envelope(&a_line);
+            let mut img_slice = img.slice_mut(s![n as usize, ..]);
+            img_slice.assign(&env);
+        }
+        info!("Envelope detected Data shape = {:?}", img.shape());
+
+        // log compression
+        let dr = 35.0;
+        let img_log = log_compress(&img, dr);
+
+        // scan conversion
+        let (img_sc, x_sc, z_sc) = scan_convert(&img_log, &xd2, &zd);
+        info!("Length of z vector after scan conversion {:?}", z_sc.len());
+        info!("Length of x vector after scan conversion {:?}", x_sc.len());
+        info!("Scan converted imape shape = {:?}", img_sc.shape());
+
+        let img_sc = transpose(img_sc);
+
+        let img = img_sc.mapv(|x| x as u8);
+        let imgx = img.shape()[0] as u32;
+        let imgy = img.shape()[1] as u32;
+        let imgbuf = image::GrayImage::from_vec(imgy, imgx, img.into_raw_vec());
+
+        // let img_save_path = Path::new("./result.png");
+        // imgbuf.clone().unwrap().save(img_save_path).unwrap();
+
+        info!("Elapsed time: {:.2?} s", before.elapsed());
+        let dyn_img = DynamicImage::ImageLuma8(imgbuf.unwrap());
 
         let mut buffer = Vec::new();
         dyn_img
@@ -83,39 +132,54 @@ impl ImageProcessor {
     }
 }
 
+#[uniffi::export]
+#[cfg(feature = "rf2iq")]
+impl ImageProcessor {
+    pub fn process_rf(&self) -> Result<IQData, ImageError> {
+        tracing_subscriber::fmt().init();
+
+        let before = Instant::now();
+
+        // data loading
+        let data_path = Path::new(&self.path);
+        let data = get_data(&data_path);
+
+        info!("Data shape = {:?}", data.shape());
+
+        let t = Array::range(0., REC_LEN as f64, 1.) / SAMPLE_RATE - TIME_OFFSET;
+        let xd = Array::range(0., N_PROBE_CHANNELS as f64, 1.) * ARRAY_PITCH;
+        let xd_max = *xd.max().unwrap();
+        let xd = xd - xd_max / 2.;
+
+        // preprocessing
+        let (preproc_data, t_interp) = preproc(&data, &t, &xd);
+
+        info!("Preprocess Data shape = {:?}", preproc_data.shape());
+
+        info!(
+            "Elapsed time before beamforming: {:.2?} s",
+            before.elapsed()
+        );
+
+        Ok(IQData {
+            preproc: Array3Data::from_array(preproc_data),
+            t_interp: t_interp.into_raw_vec(),
+            xd: xd.into_raw_vec(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn main() {
-        let raw_data: Array4<f32> =
-            read_npy("../external/complex_data.npy").expect("Failed to read complex_data.npy");
-        println!("Loaded raw data with shape: {:?}", raw_data.dim());
+    #[cfg(feature = "rf2iq")]
+    fn processor_test() {
+        let proc = ImageProcessor::new("../example_us_bmode_sensor_data.h5".to_owned());
+        let iq_data = proc.process_rf().unwrap();
+        let img = proc.process_iq(iq_data);
 
-        // This gives a 3D array of shape (128, 382, 2)
-        let frame_index = 0;
-        let frame: Array3<f32> = raw_data.index_axis(Axis(0), frame_index).to_owned();
-        println!("Selected frame shape: {:?}", frame.dim());
-        
-        // Convert the selected frame to a 2D complex array (shape: 128 x 382).
-        let complex_data = convert_to_complex(frame);
-        println!("Converted frame to complex array with shape: {:?}", complex_data.dim());
-
-        // 2. Compute the envelope (magnitude) of the complex data.
-        let envelope_data = compute_envelope(&complex_data);
-
-        // 3. Apply Time Gain Compensation.
-        let tgc_data = apply_tgc(&envelope_data);
-
-        // 4. Apply log compression.
-        let compressed_data = log_compression(&tgc_data);
-
-        // 5. Create and save the image.
-        let img = create_image(&compressed_data);
-        img.save("ultrasound_image_raw.png")
-            .expect("Failed to save image");
-
-        println!("Ultrasound image saved as ultrasound_image_raw.png");
+        assert!(img.is_ok());
     }
 }
