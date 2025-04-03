@@ -1,0 +1,6 @@
+[broker]
+host = "broker.hivemq.com"
+port = 1883
+
+[server]
+url = "http://localhost:8080/scan"

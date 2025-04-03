@@ -1,0 +1,6 @@
+[database]
+username = "[username]"
+password = "[password]"
+host = "localhost"
+port = 5433
+name = "rust_capstone"

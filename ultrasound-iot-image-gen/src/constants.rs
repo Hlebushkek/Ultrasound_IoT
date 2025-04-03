@@ -1,0 +1,11 @@
+pub const SAMPLE_RATE: f64 = 27.72e6;
+pub const TIME_OFFSET: f64 = 1.33e-6;
+pub const SPEED_SOUND: f64 = 1540.0;
+pub const N_TRANSMIT_BEAMS: u32 = 96;
+pub const N_PROBE_CHANNELS: u32 = 32;
+pub const TRANSMIT_FREQ: f64 = 1.6e6;
+pub const TRANSMIT_FOCAL_DEPTH: f64 = 20e-3;
+pub const ARRAY_PITCH: f64 = 2.0 * 1.8519e-4;
+pub const REC_LEN: u32 = 1585;
+pub const UPSAMP_FACT: u32 = 4;
+pub const DECIM_FACT: u32 = 8;

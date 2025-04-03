@@ -1,0 +1,3 @@
+[submodule "external/UltrasoundScanning"]
+	path = external/UltrasoundScanning
+	url = https://github.com/Hlebushkek/UltrasoundScanningApp.git
