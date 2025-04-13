@@ -134,9 +134,9 @@ async fn main(spawner: Spawner) {
     stack.wait_config_up().await;
     info!("Stack is up!");
 
-    let mut rx_buffer = [0; 4096];
-    let mut tx_buffer = [0; 4096];
-    let mut buf = [0; 4096];
+    let mut rx_buffer = [0; 256];
+    let mut tx_buffer = [0; 256];
+    let mut buf = [0; 256];
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
     let address = match stack
@@ -167,11 +167,11 @@ async fn main(spawner: Spawner) {
     config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1);
     config.add_client_id(DEVICE_ID);
     config.max_packet_size = 100;
-    let mut recv_buffer = [0; 80];
-    let mut write_buffer = [0; 80];
+    let mut recv_buffer = [0; 256];
+    let mut write_buffer = [0; 256];
 
     let mut client =
-        MqttClient::<_, 5, _>::new(socket, &mut write_buffer, 80, &mut recv_buffer, 80, config);
+        MqttClient::<_, 5, _>::new(socket, &mut write_buffer, 256, &mut recv_buffer, 256, config);
 
     match client.connect_to_broker().await {
         Ok(()) => {}
@@ -187,10 +187,9 @@ async fn main(spawner: Spawner) {
         },
     }
 
-    let session_id = generate_id(&mut rng);
-    let session_id_str = core::str::from_utf8(&session_id).unwrap();
+    let session_id = generate_id_hex(&mut rng);
     let mut topic: String<128> = String::new();
-    let _ = core::fmt::write(&mut topic, format_args!("rust_6_project/device/{}/session/{}", DEVICE_ID, session_id_str));
+    let _ = core::fmt::write(&mut topic, format_args!("rust_6_project/device/{}/session/{}", DEVICE_ID, &session_id));
 
     let delay = Duration::from_secs(1);
     loop {
@@ -232,10 +231,19 @@ async fn main(spawner: Spawner) {
     }
 }
 
-fn generate_id(rng: &mut impl RngCore) -> [u8; 16] {
-    let mut buffer = [0u8; 16];
+fn generate_id(rng: &mut impl RngCore) -> [u8; 8] {
+    let mut buffer = [0u8; 8];
     rng.fill_bytes(&mut buffer);
     buffer
+}
+
+fn generate_id_hex(rng: &mut impl RngCore) -> heapless::String<16> {
+    let id = generate_id(rng);
+    let mut s = heapless::String::<16>::new();
+    for byte in &id {
+        let _ = s.write_fmt(format_args!("{:02x}", byte));
+    }
+    s
 }
 
 fn convert_to_celsius(raw_temp: u16) -> f32 {
