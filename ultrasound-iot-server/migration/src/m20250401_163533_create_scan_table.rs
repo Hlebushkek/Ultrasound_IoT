@@ -1,5 +1,5 @@
-use sea_orm_migration::{prelude::*, schema::*};
 use crate::m20250401_163440_create_patient_table::Patient;
+use sea_orm_migration::{prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -18,17 +18,13 @@ impl MigrationTrait for Migration {
                     .col(uuid_null(Scan::PatientId))
                     .col(date_time(Scan::CreatedAt))
                     .col(date_time(Scan::UpdatedAt))
-                    .primary_key(
-                        Index::create()
-                            .col(Scan::Session)
-                            .col(Scan::Device)
-                    )
+                    .primary_key(Index::create().col(Scan::Session).col(Scan::Device))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-scan-patient")
                             .from(Scan::Table, Scan::PatientId)
                             .to(Patient::Table, Patient::Id)
-                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )

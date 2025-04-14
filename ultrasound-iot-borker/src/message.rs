@@ -10,5 +10,5 @@ pub struct DeviceMessage {
 pub struct ScanMessage {
     pub device: Uuid,
     pub session: String,
-    pub scan: Vec<f32>,
+    pub values: Vec<f32>,
 }

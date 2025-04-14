@@ -51,7 +51,7 @@ pub async fn get(
     let path = utils::file_url(&scan.session, &scan.device.to_string());
 
     // Ok(NamedFile::open_async(path).await)
-    Ok(NamedFile::open_async("../example_us_bmode_sensor_data.h5").await)
+    Ok(NamedFile::open_async("example_us_bmode_sensor_data.h5").await)
 }
 
 #[post("")]

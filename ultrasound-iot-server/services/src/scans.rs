@@ -1,6 +1,7 @@
 use sea_orm::ActiveModelTrait;
-use sea_orm::{prelude::Uuid, sqlx::types::chrono::Utc};
+use sea_orm::sqlx::types::chrono;
 use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{prelude::Uuid, sqlx::types::chrono::Utc};
 use tracing::instrument;
 
 use crate::entities::scan;
@@ -32,7 +33,7 @@ pub async fn create_or_update(db: &DatabaseConnection, id: ScanId) -> Result<sca
 
     let now = Utc::now();
 
-    if let Some(scan) = scan {    
+    if let Some(scan) = scan {
         let mut scan: scan::ActiveModel = scan.into();
         scan.updated_at = Set(now.naive_utc());
         scan.update(db).await
@@ -42,6 +43,8 @@ pub async fn create_or_update(db: &DatabaseConnection, id: ScanId) -> Result<sca
             session: Set(session),
             device: Set(device),
             path: Set(url),
+            created_at: Set(now.naive_utc()),
+            updated_at: Set(now.naive_utc()),
             ..Default::default()
         };
 
@@ -50,7 +53,11 @@ pub async fn create_or_update(db: &DatabaseConnection, id: ScanId) -> Result<sca
 }
 
 #[instrument(name = "assign_patient_to_scan", skip(db))]
-pub async fn assign_patient(db: &DatabaseConnection, session: &str, pateint: Uuid) -> Result<scan::Model, DbErr> {
+pub async fn assign_patient(
+    db: &DatabaseConnection,
+    session: &str,
+    pateint: Uuid,
+) -> Result<scan::Model, DbErr> {
     let mut scan: scan::ActiveModel = scan::Entity::find()
         .filter(scan::Column::Session.eq(session))
         .one(db)

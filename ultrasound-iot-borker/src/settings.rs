@@ -21,7 +21,7 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let base_path = std::env::current_dir().expect("Failed to determine the current directory");
-        let config_dir = base_path.join("config");
+        let config_dir = base_path.join("ultrasound-iot-borker/config");
 
         let s = Config::builder()
             .add_source(File::from(config_dir.join("settings.toml")))

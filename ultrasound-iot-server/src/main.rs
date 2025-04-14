@@ -7,6 +7,7 @@ use actix_web::{App, HttpServer, web::Data};
 
 use services::sea_orm::Database;
 
+use tracing_actix_web::TracingLogger;
 use ultrasound_iot_server::app_state::AppState;
 use ultrasound_iot_server::routes;
 use ultrasound_iot_server::session::lobby::Lobby;
@@ -32,6 +33,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .configure(routes::configure)
+            .wrap(TracingLogger::default())
             .app_data(Data::new(app_state.clone()))
             .app_data(Data::new(lobby_addr.clone()))
     })

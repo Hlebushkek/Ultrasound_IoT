@@ -5,28 +5,28 @@
 #![no_std]
 #![no_main]
 
+use core::fmt::Write;
 use cyw43::JoinOptions;
-use cyw43_pio::{PioSpi, DEFAULT_CLOCK_DIVIDER};
+use cyw43_pio::{DEFAULT_CLOCK_DIVIDER, PioSpi};
 use defmt::*;
 use embassy_executor::Spawner;
+use embassy_net::tcp::TcpSocket;
+use embassy_net::{Config, StackResources};
+use embassy_net::{Config as EmbassyNetConfig, dns::DnsQueryType};
+use embassy_rp::adc::{Adc, Channel, Config as EmbassyAdcConfig};
 use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::Pio;
-use embassy_rp::adc::{Adc, Channel, Config as EmbassyAdcConfig};
 use embassy_time::{Duration, Timer};
-use embassy_net::{Config, StackResources};
-use embassy_net::tcp::TcpSocket;
-use embassy_net::{dns::DnsQueryType, Config as EmbassyNetConfig};
+use heapless::String;
+use rand::RngCore;
 use rust_mqtt::{
     client::{client::MqttClient, client_config::ClientConfig},
     packet::v5::reason_codes::ReasonCode,
     utils::rng_generator::CountingRng,
 };
-use heapless::String;
-use rand::RngCore;
-use core::fmt::Write;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -41,7 +41,9 @@ const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
 const DEVICE_ID: &str = env!("DEVICE_ID");
 
 #[embassy_executor::task]
-async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>) -> ! {
+async fn cyw43_task(
+    runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>,
+) -> ! {
     runner.run().await
 }
 
@@ -100,7 +102,12 @@ async fn main(spawner: Spawner) {
 
     // Init network stack
     static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-    let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
+    let (stack, runner) = embassy_net::new(
+        net_device,
+        config,
+        RESOURCES.init(StackResources::new()),
+        seed,
+    );
 
     unwrap!(spawner.spawn(net_task(runner)));
 
@@ -140,7 +147,7 @@ async fn main(spawner: Spawner) {
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
     let address = match stack
-        .dns_query("broker.hivemq.com", DnsQueryType::A)
+        .dns_query("test.mosquitto.org", DnsQueryType::A)
         .await
         .map(|a| a[0])
     {
@@ -170,8 +177,14 @@ async fn main(spawner: Spawner) {
     let mut recv_buffer = [0; 256];
     let mut write_buffer = [0; 256];
 
-    let mut client =
-        MqttClient::<_, 5, _>::new(socket, &mut write_buffer, 256, &mut recv_buffer, 256, config);
+    let mut client = MqttClient::<_, 5, _>::new(
+        socket,
+        &mut write_buffer,
+        256,
+        &mut recv_buffer,
+        256,
+        config,
+    );
 
     match client.connect_to_broker().await {
         Ok(()) => {}
@@ -189,7 +202,13 @@ async fn main(spawner: Spawner) {
 
     let session_id = generate_id_hex(&mut rng);
     let mut topic: String<128> = String::new();
-    let _ = core::fmt::write(&mut topic, format_args!("rust_6_project/device/{}/session/{}", DEVICE_ID, &session_id));
+    let _ = core::fmt::write(
+        &mut topic,
+        format_args!(
+            "rust_6_project/device/{}/session/{}",
+            DEVICE_ID, &session_id
+        ),
+    );
 
     let delay = Duration::from_secs(1);
     loop {
@@ -201,7 +220,10 @@ async fn main(spawner: Spawner) {
         let celsius = convert_to_celsius(temp);
 
         let mut celsius_string = String::<64>::new();
-        let _ = core::fmt::write(&mut celsius_string, format_args!("{{ value: {} }}", celsius));
+        let _ = core::fmt::write(
+            &mut celsius_string,
+            format_args!("{{ \"value\": {} }}", celsius),
+        );
 
         match client
             .send_message(
